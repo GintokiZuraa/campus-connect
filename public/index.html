@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peta Asal Mahasiswa Cilacap</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div id="sidebar">
+        <h1>
+            <span>🗺️</span> 
+            Campus Connect
+        </h1>
+        
+        <div class="university-badge">
+            <div class="university-name" id="univ-name">Loading...</div>
+            <div class="university-coords" id="univ-coords"></div>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="total-users">0</div>
+                <div class="stat-label">Total Mahasiswa</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-cities">0</div>
+                <div class="stat-label">Kota Asal</div>
+            </div>
+        </div>
+        
+        <div class="info-box">
+            <i>ℹ️</i> Setiap mahasiswa hanya dapat menambahkan satu lokasi asal.
+            Anda dapat mengedit atau menghapus lokasi Anda kapan saja.
+        </div>
+        
+        <div class="input-group">
+            <label>👤 Nama Lengkap *</label>
+            <input type="text" id="nameInput" placeholder="Contoh: Andi Pratama" maxlength="100">
+        </div>
+        
+        <div class="input-group">
+            <label>🏙️ Kota Asal *</label>
+            <input type="text" id="originInput" placeholder="Contoh: Bandung" maxlength="100">
+        </div>
+        
+        <div class="input-group">
+            <label>📸 Social Media (Opsional)</label>
+            <input type="text" id="instagramInput" placeholder="Contoh: ig,x,fb,discord,etc">
+        </div>
+        
+        <div class="input-group">
+            <label>💬 Any note (Opsional)</label>
+            <input type="text" id="aboutInput" placeholder="Contoh: Suka coding dan gaming" maxlength="200">
+        </div>
+        
+        <button id="addBtn">
+            <span id="btn-text">➕ Tambahkan Lokasi</span>
+        </button>
+        
+        <button id="editBtn" class="btn-secondary" style="display: none;">
+            ✏️ Edit Lokasi Saya
+        </button>
+        
+        <button id="deleteBtn" class="btn-danger" style="display: none;">
+            🗑️ Hapus Lokasi Saya
+        </button>
+        
+        <button id="cancelBtn" class="btn-secondary" style="display: none;">
+            ❌ Batal
+        </button>
+        
+        <div id="status"></div>
+        
+        <div id="user-list">
+            <div class="list-header">
+                <span>📋 Daftar Mahasiswa</span>
+                <span id="user-count">(0)</span>
+            </div>
+            <div id="list-container">
+                <div class="empty-state">
+                    <div style="font-size: 48px; margin-bottom: 12px;">👥</div>
+                    <p>Belum ada data</p>
+                    <p style="font-size: 12px; margin-top: 8px;">Tambahkan lokasi pertama Anda!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Custom JS -->
+    <script src="script.js"></script>
+</body>
+</html>
