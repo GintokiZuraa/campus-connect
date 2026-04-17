@@ -1,5 +1,5 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
@@ -7,167 +7,167 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+        rejectUnauthorized: false 
+    }
+});
+
+pool.connect((err, client, release) => {
+    if (err) {
+        console.error('❌ Error connecting to PostgreSQL:', err.stack);
+    } else {
+        console.log('✅ Connected to PostgreSQL');
+        release();
+    }
+});
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-const db = new sqlite3.Database('./campus_connect.db');
-
-db.run(`
+const createTableQuery = `
     CREATE TABLE IF NOT EXISTS user_locations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         user_id TEXT NOT NULL UNIQUE,
         name TEXT NOT NULL,
         origin_city TEXT NOT NULL,
-        latitude REAL NOT NULL,
-        longitude REAL NOT NULL,
+        latitude DECIMAL(10, 8) NOT NULL,
+        longitude DECIMAL(11, 8) NOT NULL,
         display_address TEXT,
         instagram TEXT,
         about_me TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
-`);
+`;
+
+pool.query(createTableQuery).catch(err => console.error('Table creation error:', err));
 
 const UNIVERSITY = {
-    name: 'Politeknik Negeri Cilacap',
-    lat: -7.718063,
-    lng: 109.019134
+    name: process.env.UNIVERSITY_NAME || 'Politeknik Negeri Cilacap',
+    lat: parseFloat(process.env.UNIVERSITY_LAT) || -7.718063,
+    lng: parseFloat(process.env.UNIVERSITY_LNG) || 109.019134
 };
 
-app.get('/api/locations', (req, res) => {
-    db.all('SELECT * FROM user_locations ORDER BY created_at DESC', (err, rows) => {
-        if (err) {
-            res.status(500).json({ success: false, error: err.message });
-            return;
-        }
+app.get('/api/locations', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM user_locations ORDER BY created_at DESC');
         res.json({
             success: true,
-            count: rows.length,
-            data: rows,
+            count: result.rows.length,
+            data: result.rows,
             university: UNIVERSITY
         });
-    });
+    } catch (error) {
+        console.error('Error fetching locations:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
-app.post('/api/locations', (req, res) => {
+app.post('/api/locations', async (req, res) => {
     const { name, origin_city, latitude, longitude, display_address, user_id, instagram, about_me } = req.body;
-    
-    db.get('SELECT id FROM user_locations WHERE user_id = ?', [user_id], (err, row) => {
-        if (err) {
-            res.status(500).json({ success: false, error: err.message });
-            return;
-        }
-        
-        if (row) {
-            res.status(400).json({ 
+
+    try {
+        const check = await pool.query('SELECT id FROM user_locations WHERE user_id = $1', [user_id]);
+        if (check.rows.length > 0) {
+            return res.status(400).json({ 
                 success: false, 
                 error: 'Anda sudah memiliki lokasi. Gunakan edit untuk mengubah.' 
             });
-            return;
         }
-        
-        db.run(
+
+        const result = await pool.query(
             `INSERT INTO user_locations 
              (user_id, name, origin_city, latitude, longitude, display_address, instagram, about_me) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [user_id, name, origin_city, latitude, longitude, display_address, instagram || null, about_me || null],
-            function(err) {
-                if (err) {
-                    res.status(500).json({ success: false, error: err.message });
-                    return;
-                }
-                
-                db.get('SELECT * FROM user_locations WHERE id = ?', [this.lastID], (err, row) => {
-                    res.status(201).json({
-                        success: true,
-                        message: 'Location added successfully',
-                        data: row
-                    });
-                });
-            }
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [user_id, name, origin_city, latitude, longitude, display_address, instagram || null, about_me || null]
         );
-    });
+
+        res.status(201).json({
+            success: true,
+            message: 'Location added successfully',
+            data: result.rows[0]
+        });
+    } catch (error) {
+        console.error('Error adding location:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
-app.put('/api/locations/:id', (req, res) => {
+app.put('/api/locations/:id', async (req, res) => {
     const { name, origin_city, latitude, longitude, display_address, instagram, about_me } = req.body;
     const id = req.params.id;
-    
-    db.run(
-        `UPDATE user_locations 
-         SET name = ?, origin_city = ?, latitude = ?, longitude = ?, 
-             display_address = ?, instagram = ?, about_me = ?, updated_at = CURRENT_TIMESTAMP 
-         WHERE id = ?`,
-        [name, origin_city, latitude, longitude, display_address, instagram || null, about_me || null, id],
-        function(err) {
-            if (err) {
-                res.status(500).json({ success: false, error: err.message });
-                return;
-            }
-            
-            if (this.changes === 0) {
-                res.status(404).json({ success: false, error: 'Location not found' });
-                return;
-            }
-            
-            db.get('SELECT * FROM user_locations WHERE id = ?', [id], (err, row) => {
-                res.json({
-                    success: true,
-                    message: 'Location updated successfully',
-                    data: row
-                });
-            });
-        }
-    );
-});
 
-// DELETE /api/locations/:id
-app.delete('/api/locations/:id', (req, res) => {
-    db.get('SELECT * FROM user_locations WHERE id = ?', [req.params.id], (err, row) => {
-        if (err) {
-            res.status(500).json({ success: false, error: err.message });
-            return;
+    try {
+        const result = await pool.query(
+            `UPDATE user_locations 
+             SET name = $1, origin_city = $2, latitude = $3, longitude = $4, 
+                 display_address = $5, instagram = $6, about_me = $7, updated_at = CURRENT_TIMESTAMP 
+             WHERE id = $8 RETURNING *`,
+            [name, origin_city, latitude, longitude, display_address, instagram || null, about_me || null, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Location not found' });
         }
-        if (!row) {
-            res.status(404).json({ success: false, error: 'Location not found' });
-            return;
-        }
-        
-        db.run('DELETE FROM user_locations WHERE id = ?', [req.params.id], (err) => {
-            if (err) {
-                res.status(500).json({ success: false, error: err.message });
-                return;
-            }
-            res.json({ success: true, message: 'Location deleted', data: row });
+
+        res.json({
+            success: true,
+            message: 'Location updated successfully',
+            data: result.rows[0]
         });
-    });
+    } catch (error) {
+        console.error('Error updating location:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
-// GET /api/stats
-app.get('/api/stats', (req, res) => {
-    db.get('SELECT COUNT(*) as total FROM user_locations', (err, countRow) => {
-        if (err) {
-            res.status(500).json({ success: false, error: err.message });
-            return;
+app.delete('/api/locations/:id', async (req, res) => {
+    const id = req.params.id;
+
+    try {
+        const getResult = await pool.query('SELECT * FROM user_locations WHERE id = $1', [id]);
+        if (getResult.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Location not found' });
         }
-        
-        db.all(`
+
+        await pool.query('DELETE FROM user_locations WHERE id = $1', [id]);
+
+        res.json({
+            success: true,
+            message: 'Location deleted',
+            data: getResult.rows[0]
+        });
+    } catch (error) {
+        console.error('Error deleting location:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/api/stats', async (req, res) => {
+    try {
+        const countResult = await pool.query('SELECT COUNT(*) as total FROM user_locations');
+        const cityResult = await pool.query(`
             SELECT origin_city, COUNT(*) as count 
             FROM user_locations 
             GROUP BY origin_city 
             ORDER BY count DESC 
             LIMIT 5
-        `, (err, cityRows) => {
-            res.json({
-                success: true,
-                data: {
-                    total_users: countRow.total,
-                    top_cities: cityRows || []
-                }
-            });
+        `);
+
+        res.json({
+            success: true,
+            data: {
+                total_users: parseInt(countResult.rows[0].total),
+                top_cities: cityResult.rows
+            }
         });
-    });
+    } catch (error) {
+        console.error('Error fetching stats:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 app.get('/', (req, res) => {
@@ -176,6 +176,5 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📁 Using SQLite database: campus_connect.db`);
     console.log(`📍 University: ${UNIVERSITY.name}`);
 });

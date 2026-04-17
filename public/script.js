@@ -61,11 +61,9 @@ async function loadData() {
             universityData = locationsData.university;
             allUsers = locationsData.data;
             
-            // Find user's own location
             const myLocation = allUsers.find(u => u.user_id === currentUserId);
             myLocationId = myLocation ? myLocation.id : null;
             
-            // Update UI
             updateUniversityInfo();
             updateStats(statsData.data);
             drawAllLocations();
