@@ -25,7 +25,7 @@ pool.connect((err, client, release) => {
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 const createTableQuery = `
     CREATE TABLE IF NOT EXISTS user_locations (
