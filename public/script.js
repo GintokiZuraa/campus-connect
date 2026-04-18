@@ -1,7 +1,6 @@
-// Global variables
 let map;
 let univMarker;
-let userMarkers = new Map();
+let markerClusterGroup; 
 let userPolylines = new Map();
 let universityData = null;
 let allUsers = [];
@@ -27,6 +26,14 @@ function initMap() {
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
+
+    markerClusterGroup = L.markerClusterGroup({
+        showCoverageOnHover: false,
+        maxClusterRadius: 50,
+        spiderfyOnMaxZoom: true,
+        zoomToBoundsOnClick: true
+    });
+    map.addLayer(markerClusterGroup);
 }
 
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -142,10 +149,9 @@ function updateStats(stats) {
 
 function drawAllLocations() {
     if (!universityData) return;
-    
-    userMarkers.forEach(marker => map.removeLayer(marker));
+
+    markerClusterGroup.clearLayers();
     userPolylines.forEach(line => map.removeLayer(line));
-    userMarkers.clear();
     userPolylines.clear();
     
     allUsers.forEach(user => {
@@ -177,29 +183,22 @@ function drawUserLocation(user) {
             dashArray: isOwnLocation ? null : '5, 5'
         }
     ).addTo(map);
+    userPolylines.set(user.id, polyline);
     
-    const distance = calculateDistance(
-        universityData.lat, universityData.lng,
-        userLat, userLng
-    );
-    
-    const markerColor = isOwnLocation ? 'green' : 'red';
-    
+    const distance = calculateDistance(universityData.lat, universityData.lng, userLat, userLng);
     let popupContent = `
         <b>${user.name}</b> ${isOwnLocation ? '(Anda)' : ''}<br>
         📍 ${user.origin_city}<br>
         📏 ${formatDistance(distance)} dari ${universityData.name}
     `;
-    
     if (user.instagram) {
-        const instaHandle = user.instagram.replace('@', '');
-        popupContent += `<br>📸 <a href="https://instagram.com/${instaHandle}" target="_blank">@${instaHandle}</a>`;
+        popupContent += `<br>📸 ${user.instagram}`;
     }
-    
     if (user.about_me) {
         popupContent += `<br>💬 "${user.about_me}"`;
     }
     
+    const markerColor = isOwnLocation ? 'green' : 'red';
     const marker = L.marker([userLat, userLng], {
         icon: L.divIcon({
             className: 'custom-marker',
@@ -207,10 +206,9 @@ function drawUserLocation(user) {
             iconSize: [12, 12],
             iconAnchor: [6, 6]
         })
-    }).bindPopup(popupContent).addTo(map);
-    
-    userMarkers.set(user.id, marker);
-    userPolylines.set(user.id, polyline);
+    }).bindPopup(popupContent);
+
+    markerClusterGroup.addLayer(marker);
 }
 
 function renderUserList() {
